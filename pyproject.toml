@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "SifaPedal"
+dynamic = ["version"]
+description = "A Python application that maps steering wheel pedal axis input to keyboard keystrokes to act as a Sifa pedal for train simulators."
+authors = [{ name = "Kacper Jarosławski", email = "kacper.jaroslawski@kzl21.ovh" }]
+requires-python = ">=3.10"
+dependencies = [
+    "pygame>=2.6.0",
+    "pynput>=1.8.0",
+    "PyQt6>=6.11.0"
+]
+
+[project.scripts]
+sifapedal = "sifapedal.__main__:main"
+
+[tool.hatch.version]
+path = "sifapedal/__init__.py"
