@@ -72,6 +72,9 @@ class SifaPedalUI(QMainWindow):
         self.ctrl_chk = QCheckBox("Ctrl")
         self.alt_chk = QCheckBox("Alt")
         self.shift_chk = QCheckBox("Shift")
+        self.ctrl_chk.setChecked(self.core.modifiers['ctrl'])
+        self.alt_chk.setChecked(self.core.modifiers['alt'])
+        self.shift_chk.setChecked(self.core.modifiers['shift'])
         self.ctrl_chk.stateChanged.connect(self.on_modifiers_changed)
         self.alt_chk.stateChanged.connect(self.on_modifiers_changed)
         self.shift_chk.stateChanged.connect(self.on_modifiers_changed)
@@ -98,24 +101,25 @@ class SifaPedalUI(QMainWindow):
         row_thresh = QHBoxLayout()
         self.thresh_slider = QSlider(Qt.Orientation.Horizontal)
         self.thresh_slider.setRange(0, 100)
-        self.thresh_slider.setValue(50)
+        self.thresh_slider.setValue(int(self.core.threshold * 100))
         self.thresh_slider.valueChanged.connect(self.on_sensitivity_changed)
         row_thresh.addWidget(self.thresh_slider)
-        self.thresh_lbl = QLabel("0.50")
+        self.thresh_lbl = QLabel(f"{self.core.threshold:.2f}")
         row_thresh.addWidget(self.thresh_lbl)
         sens_layout.addRow("Threshold:", row_thresh)
 
         row_dead = QHBoxLayout()
         self.dead_slider = QSlider(Qt.Orientation.Horizontal)
         self.dead_slider.setRange(0, 100)
-        self.dead_slider.setValue(5)
+        self.dead_slider.setValue(int(self.core.deadzone * 100))
         self.dead_slider.valueChanged.connect(self.on_sensitivity_changed)
         row_dead.addWidget(self.dead_slider)
-        self.dead_lbl = QLabel("0.05")
+        self.dead_lbl = QLabel(f"{self.core.deadzone:.2f}")
         row_dead.addWidget(self.dead_lbl)
         sens_layout.addRow("Deadzone:", row_dead)
 
         self.invert_chk = QCheckBox("Invert")
+        self.invert_chk.setChecked(self.core.invert)
         self.invert_chk.stateChanged.connect(self.on_sensitivity_changed)
         sens_layout.addRow("", self.invert_chk)
 
@@ -146,6 +150,7 @@ class SifaPedalUI(QMainWindow):
         self.key_btn.setText("Rebind")
         self.key_btn.clicked.disconnect()
         self.key_btn.clicked.connect(self.start_rebind)
+        self.core.save_config()
 
     def keyPressEvent(self, event):
         if not self.listening_for_key:
@@ -186,11 +191,14 @@ class SifaPedalUI(QMainWindow):
         self.joystick_cb.clear()
 
         if self.joysticks_data:
-            for idx, name in self.joysticks_data:
+            target_idx = 0
+            for i, (idx, name) in enumerate(self.joysticks_data):
                 self.joystick_cb.addItem(f"{idx}: {name}")
+                if name == self.core.target_joystick_name:
+                    target_idx = i
             self.joystick_cb.blockSignals(False)
-            self.joystick_cb.setCurrentIndex(0)
-            self.on_joystick_selected(0)
+            self.joystick_cb.setCurrentIndex(target_idx)
+            self.on_joystick_selected(target_idx)
         else:
             self.joystick_cb.addItem("No joysticks found")
             self.joystick_cb.blockSignals(False)
@@ -208,20 +216,27 @@ class SifaPedalUI(QMainWindow):
                     for i in range(num_axes):
                         self.axis_cb.addItem(f"Axis {i}")
                     self.axis_cb.blockSignals(False)
-                    self.axis_cb.setCurrentIndex(0)
-                    self.on_axis_selected(0)
+                    if self.core.axis_index < num_axes:
+                        self.axis_cb.setCurrentIndex(self.core.axis_index)
+                        self.on_axis_selected(self.core.axis_index)
+                    else:
+                        self.axis_cb.setCurrentIndex(0)
+                        self.on_axis_selected(0)
                 else:
                     self.axis_cb.addItem("No axes on this device")
                     self.axis_cb.blockSignals(False)
+            self.core.save_config()
 
     def on_axis_selected(self, index):
         if index >= 0:
             self.core.axis_index = index
+            self.core.save_config()
 
     def on_modifiers_changed(self):
         self.core.modifiers['ctrl'] = self.ctrl_chk.isChecked()
         self.core.modifiers['alt'] = self.alt_chk.isChecked()
         self.core.modifiers['shift'] = self.shift_chk.isChecked()
+        self.core.save_config()
 
     def on_sensitivity_changed(self):
         t = self.thresh_slider.value() / 100.0
@@ -231,6 +246,7 @@ class SifaPedalUI(QMainWindow):
         self.core.invert = self.invert_chk.isChecked()
         self.thresh_lbl.setText(f"{t:.2f}")
         self.dead_lbl.setText(f"{d:.2f}")
+        self.core.save_config()
 
     def poll_core(self):
         val = self.core.tick()

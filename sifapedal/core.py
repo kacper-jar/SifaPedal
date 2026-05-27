@@ -6,10 +6,14 @@ import pygame
 from pynput.keyboard import Controller, Key, KeyCode
 import threading
 import time
+import json
+from sifapedal import Utils
 
 
 class SifaPedalCore:
     def __init__(self):
+        self.utils = Utils()
+
         pygame.init()
         pygame.joystick.init()
 
@@ -17,6 +21,8 @@ class SifaPedalCore:
 
         self.joystick = None
         self.joystick_index = -1
+        self.config_file = self.utils.config_path
+
         self.axis_index = 0
         self.threshold = 0.5
         self.deadzone = 0.05
@@ -25,11 +31,49 @@ class SifaPedalCore:
         self.base_key = 'space'
         self.modifiers = {'ctrl': False, 'alt': False, 'shift': False}
 
+        self.target_joystick_name = ''
+        self.load_config()
+
         self.is_pressed = False
         self.running = False
 
         self.state = "Ready"
         self.last_released_time = 0.0
+
+    def load_config(self):
+        if os.path.exists(self.config_file):
+            try:
+                with open(self.config_file, 'r') as f:
+                    config = json.load(f)
+                self.axis_index = config.get('axis_index', 0)
+                self.threshold = config.get('threshold', 0.5)
+                self.deadzone = config.get('deadzone', 0.05)
+                self.invert = config.get('invert', False)
+                self.base_key = config.get('base_key', 'space')
+                self.modifiers = config.get('modifiers', {'ctrl': False, 'alt': False, 'shift': False})
+                self.target_joystick_name = config.get('joystick_name', '')
+            except Exception as e:
+                print(f"Failed to load config: {e}")
+
+    def save_config(self):
+        joystick_name = ''
+        if self.joystick is not None:
+            joystick_name = self.joystick.get_name()
+
+        config = {
+            'joystick_name': joystick_name,
+            'axis_index': self.axis_index,
+            'threshold': self.threshold,
+            'deadzone': self.deadzone,
+            'invert': self.invert,
+            'base_key': self.base_key,
+            'modifiers': self.modifiers
+        }
+        try:
+            with open(self.config_file, 'w') as f:
+                json.dump(config, f, indent=4)
+        except Exception as e:
+            print(f"Failed to save config: {e}")
 
     def refresh_joysticks(self):
         """Returns a list of tuples (index, name) for all connected joysticks."""
@@ -85,7 +129,7 @@ class SifaPedalCore:
         if self.modifiers['ctrl']: self.keyboard.release(Key.ctrl)
 
     def tap_keys(self):
-        """Briefly press and release keys for 'tap' mode."""
+        """Briefly press and release keys."""
         self._press_keys()
         time.sleep(0.05)
         self._release_keys()
