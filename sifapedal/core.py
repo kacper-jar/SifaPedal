@@ -28,6 +28,9 @@ class SifaPedalCore:
         self.is_pressed = False
         self.running = False
 
+        self.state = "Ready"
+        self.last_released_time = 0.0
+
     def refresh_joysticks(self):
         """Returns a list of tuples (index, name) for all connected joysticks."""
         pygame.joystick.quit()
@@ -119,10 +122,17 @@ class SifaPedalCore:
 
         if currently_pressed and not self.is_pressed:
             self.is_pressed = True
+            self.state = "Pedal pressed"
 
         elif not currently_pressed and self.is_pressed:
             self.is_pressed = False
+            self.state = "Pedal released (Sifa Acknowledge keybind pressed)"
+            self.last_released_time = time.time()
             threading.Thread(target=self.tap_keys, daemon=True).start()
+
+        if not self.is_pressed and self.state != "Ready":
+            if time.time() - self.last_released_time > 30.0:
+                self.state = "Ready"
 
         return val
 

@@ -124,8 +124,8 @@ class SifaPedalUI(QMainWindow):
 
         status_group = QGroupBox("Status")
         status_layout = QVBoxLayout()
-        self.pressed_lbl = QLabel("Pedal State: RELEASED")
-        self.pressed_lbl.setStyleSheet("color: red; font-weight: bold;")
+        self.pressed_lbl = QLabel("Ready")
+        self.pressed_lbl.setStyleSheet("color: gray; font-weight: bold;")
         status_layout.addWidget(self.pressed_lbl)
         status_group.setLayout(status_layout)
         self.main_layout.addWidget(status_group)
@@ -236,11 +236,12 @@ class SifaPedalUI(QMainWindow):
         val = self.core.tick()
         self.axis_prog.setValue(int(val * 100))
 
-        if self.core.is_pressed:
-            self.pressed_lbl.setText("Pedal State: PRESSED")
+        self.pressed_lbl.setText(self.core.state)
+        if self.core.state == "Ready":
+            self.pressed_lbl.setStyleSheet("color: gray; font-weight: bold;")
+        elif self.core.state == "Pedal pressed":
             self.pressed_lbl.setStyleSheet("color: green; font-weight: bold;")
         else:
-            self.pressed_lbl.setText("Pedal State: RELEASED")
             self.pressed_lbl.setStyleSheet("color: red; font-weight: bold;")
 
     def closeEvent(self, event):
