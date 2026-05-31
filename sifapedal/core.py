@@ -7,7 +7,15 @@ from pynput.keyboard import Controller, Key, KeyCode
 import threading
 import time
 import json
+from enum import Enum
 from sifapedal import Utils
+
+
+class PedalState(Enum):
+    READY = "Ready"
+    PEDAL_PRESSED = "Pedal pressed"
+    WAITING_FOR_REPRESS = "Waiting for repress"
+    SIFA_ACKNOWLEDGED = "Sifa Acknowledged"
 
 
 class SifaPedalCore:
@@ -36,9 +44,10 @@ class SifaPedalCore:
 
         self.is_pressed = False
         self.running = False
+        self.has_moved = False
 
-        self.state = "Ready"
-        self.last_released_time = 0.0
+        self.state = PedalState.READY
+        self.last_action_time = 0.0
 
     def load_config(self):
         if os.path.exists(self.config_file):
@@ -89,6 +98,8 @@ class SifaPedalCore:
         """Initializes the selected joystick."""
         if self.joystick is not None:
             self.joystick.quit()
+
+        self.has_moved = False
 
         if 0 <= index < pygame.joystick.get_count():
             self.joystick = pygame.joystick.Joystick(index)
@@ -150,7 +161,17 @@ class SifaPedalCore:
         except pygame.error:
             return 0.0
 
+        if not self.has_moved:
+            if abs(raw_value) < 0.05:
+                raw_value = 1.0 if self.invert else -1.0
+            else:
+                self.has_moved = True
+
         return self.process_axis_value(raw_value)
+
+    def set_state(self, new_state):
+        self.state = new_state
+        self.last_action_time = time.time()
 
     def process_axis_value(self, value):
         """Processes the raw axis value and triggers key events if necessary."""
@@ -166,17 +187,29 @@ class SifaPedalCore:
 
         if currently_pressed and not self.is_pressed:
             self.is_pressed = True
-            self.state = "Pedal pressed"
+            if self.state == PedalState.WAITING_FOR_REPRESS:
+                self.set_state(PedalState.SIFA_ACKNOWLEDGED)
+                threading.Thread(target=self.tap_keys, daemon=True).start()
+            else:
+                self.set_state(PedalState.PEDAL_PRESSED)
 
         elif not currently_pressed and self.is_pressed:
             self.is_pressed = False
-            self.state = "Pedal released (Sifa Acknowledge keybind pressed)"
-            self.last_released_time = time.time()
-            threading.Thread(target=self.tap_keys, daemon=True).start()
+            self.set_state(PedalState.WAITING_FOR_REPRESS)
 
-        if not self.is_pressed and self.state != "Ready":
-            if time.time() - self.last_released_time > 30.0:
-                self.state = "Ready"
+        time_since_action = time.time() - self.last_action_time
+
+        if self.state == PedalState.SIFA_ACKNOWLEDGED:
+            if time_since_action > 30.0:
+                self.set_state(PedalState.READY)
+            elif time_since_action > 5.0:
+                self.state = PedalState.PEDAL_PRESSED
+        elif self.state == PedalState.PEDAL_PRESSED:
+            if time_since_action > 30.0:
+                self.set_state(PedalState.READY)
+        elif self.state == PedalState.WAITING_FOR_REPRESS:
+            if time_since_action > 30.0:
+                self.set_state(PedalState.READY)
 
         return val
 

@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QTimer
 
-from sifapedal import __version__
+from sifapedal import __version__, PedalState
 
 
 class SifaPedalUI(QMainWindow):
@@ -254,10 +254,10 @@ class SifaPedalUI(QMainWindow):
         val = self.core.tick()
         self.axis_prog.setValue(int(val * 100))
 
-        self.pressed_lbl.setText(self.core.state)
-        if self.core.state == "Ready":
+        self.pressed_lbl.setText(self.core.state.value)
+        if self.core.state == PedalState.READY:
             self.pressed_lbl.setStyleSheet("color: gray; font-weight: bold;")
-        elif self.core.state == "Pedal pressed":
+        elif self.core.state in (PedalState.PEDAL_PRESSED, PedalState.SIFA_ACKNOWLEDGED):
             self.pressed_lbl.setStyleSheet("color: green; font-weight: bold;")
         else:
             self.pressed_lbl.setStyleSheet("color: red; font-weight: bold;")
