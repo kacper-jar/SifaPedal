@@ -47,7 +47,7 @@ jobs:
       - name: Prepare Portable Executable
         shell: bash
         run: |
-          cp dist/SifaPedal.exe dist/SifaPedal-${{ steps.meta.outputs.version }}-portable.exe
+          mv dist/SifaPedal.exe dist/SifaPedal-portable.exe
 
       - name: Build Installer
         run: iscc /DMyAppName="${{ steps.meta.outputs.name }}" /DMyAppVersion="${{ steps.meta.outputs.version }}" /DMyAppPublisher="${{ steps.meta.outputs.author }}" packaging\windows\installer.iss
@@ -56,15 +56,15 @@ jobs:
         shell: bash
         run: |
           cd packaging/windows/Output
-          mv SifaPedal-windows-setup.exe SifaPedal-${{ steps.meta.outputs.version }}-setup.exe
+          mv SifaPedal-windows-setup.exe SifaPedal-setup.exe
 
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: SifaPedal-Windows
           path: |
-            dist/SifaPedal-*-portable.exe
-            packaging/windows/Output/SifaPedal-*-setup.exe
+            dist/SifaPedal-portable.exe
+            packaging/windows/Output/SifaPedal-setup.exe
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -73,5 +73,5 @@ jobs:
           draft: true
           prerelease: ${{ contains(github.ref, 'rc') || contains(github.ref, 'alpha') || contains(github.ref, 'beta') }}
           files: |
-            dist/SifaPedal-*-portable.exe
-            packaging/windows/Output/SifaPedal-*-setup.exe
+            dist/SifaPedal-portable.exe
+            packaging/windows/Output/SifaPedal-setup.exe
