@@ -6,13 +6,15 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QTimer
 
+from sifapedal import __version__
+
 
 class SifaPedalUI(QMainWindow):
     def __init__(self, core):
         super().__init__()
         self.core = core
 
-        self.setWindowTitle("SifaPedal")
+        self.setWindowTitle(f"SifaPedal {__version__}")
         self.setMinimumSize(400, 470)
         self.setMaximumSize(400, 470)
 
