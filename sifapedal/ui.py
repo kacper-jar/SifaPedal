@@ -2,7 +2,7 @@ import sys
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QGroupBox, QLabel, QComboBox, QPushButton, QCheckBox,
-    QSlider, QFormLayout, QProgressBar
+    QSlider, QFormLayout, QProgressBar, QDoubleSpinBox
 )
 from PyQt6.QtCore import Qt, QTimer
 
@@ -15,10 +15,10 @@ class SifaPedalUI(QMainWindow):
         self.core = core
 
         self.setWindowTitle(f"SifaPedal {__version__}")
-        self.setMinimumSize(400, 470)
-        self.setMaximumSize(400, 470)
+        self.setMinimumSize(400, 580)
+        self.setMaximumSize(400, 580)
 
-        self.listening_for_key = False
+        self.rebind_target = None
 
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
@@ -39,6 +39,8 @@ class SifaPedalUI(QMainWindow):
 
         row1 = QHBoxLayout()
         self.joystick_cb = QComboBox()
+        self.joystick_cb.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.joystick_cb.setMinimumContentsLength(10)
         self.joystick_cb.currentIndexChanged.connect(self.on_joystick_selected)
         row1.addWidget(self.joystick_cb, 1)
 
@@ -55,41 +57,7 @@ class SifaPedalUI(QMainWindow):
         dev_group.setLayout(dev_layout)
         self.main_layout.addWidget(dev_group)
 
-        key_group = QGroupBox("Keybind")
-        key_layout = QFormLayout()
-        key_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
-        key_layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
-
-        row_key = QHBoxLayout()
-        self.key_lbl = QLabel(self.core.base_key)
-        self.key_lbl.setStyleSheet(
-            "font-weight: bold; padding: 4px; background-color: rgba(0,0,0,0.1); border-radius: 4px;")
-        self.key_btn = QPushButton("Rebind")
-        self.key_btn.clicked.connect(self.start_rebind)
-        row_key.addWidget(self.key_lbl, 1)
-        row_key.addWidget(self.key_btn)
-        key_layout.addRow("Base Key:", row_key)
-
-        row_mods = QHBoxLayout()
-        self.ctrl_chk = QCheckBox("Ctrl")
-        self.alt_chk = QCheckBox("Alt")
-        self.shift_chk = QCheckBox("Shift")
-        self.ctrl_chk.setChecked(self.core.modifiers['ctrl'])
-        self.alt_chk.setChecked(self.core.modifiers['alt'])
-        self.shift_chk.setChecked(self.core.modifiers['shift'])
-        self.ctrl_chk.stateChanged.connect(self.on_modifiers_changed)
-        self.alt_chk.stateChanged.connect(self.on_modifiers_changed)
-        self.shift_chk.stateChanged.connect(self.on_modifiers_changed)
-        row_mods.addWidget(self.ctrl_chk)
-        row_mods.addWidget(self.alt_chk)
-        row_mods.addWidget(self.shift_chk)
-        row_mods.addStretch()
-        key_layout.addRow("Modifiers:", row_mods)
-
-        key_group.setLayout(key_layout)
-        self.main_layout.addWidget(key_group)
-
-        sens_group = QGroupBox("Sensitivity")
+        sens_group = QGroupBox("Pedal Configuration")
         sens_layout = QFormLayout()
         sens_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         sens_layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -128,6 +96,94 @@ class SifaPedalUI(QMainWindow):
         sens_group.setLayout(sens_layout)
         self.main_layout.addWidget(sens_group)
 
+        key_group = QGroupBox("In-game Sifa")
+        key_layout = QFormLayout()
+        key_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        key_layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        row_key = QHBoxLayout()
+        self.key_lbl = QLabel(self.core.sifa_base_key)
+        self.key_lbl.setStyleSheet(
+            "font-weight: bold; padding: 4px; background-color: rgba(0,0,0,0.1); border-radius: 4px;")
+        self.key_btn = QPushButton("Rebind")
+        self.key_btn.clicked.connect(self.start_rebind_sifa)
+        row_key.addWidget(self.key_lbl, 1)
+        row_key.addWidget(self.key_btn)
+        key_layout.addRow("Base Key:", row_key)
+
+        row_mods = QHBoxLayout()
+        self.ctrl_chk = QCheckBox("Ctrl")
+        self.alt_chk = QCheckBox("Alt")
+        self.shift_chk = QCheckBox("Shift")
+        self.ctrl_chk.setChecked(self.core.sifa_modifiers['ctrl'])
+        self.alt_chk.setChecked(self.core.sifa_modifiers['alt'])
+        self.shift_chk.setChecked(self.core.sifa_modifiers['shift'])
+        self.ctrl_chk.stateChanged.connect(self.on_sifa_modifiers_changed)
+        self.alt_chk.stateChanged.connect(self.on_sifa_modifiers_changed)
+        self.shift_chk.stateChanged.connect(self.on_sifa_modifiers_changed)
+        row_mods.addWidget(self.ctrl_chk)
+        row_mods.addWidget(self.alt_chk)
+        row_mods.addWidget(self.shift_chk)
+        row_mods.addStretch()
+        key_layout.addRow("Modifiers:", row_mods)
+
+        key_group.setLayout(key_layout)
+        self.main_layout.addWidget(key_group)
+
+        ebrake_group = QGroupBox("In-game Emergency Brake")
+        ebrake_layout = QVBoxLayout()
+
+        self.ebrake_chk = QCheckBox("Enable Emergency Brake on no pedal repress")
+        self.ebrake_chk.setChecked(self.core.emergency_brake_enabled)
+        self.ebrake_chk.stateChanged.connect(self.on_ebrake_toggled)
+        ebrake_layout.addWidget(self.ebrake_chk)
+
+        self.ebrake_inner_widget = QWidget()
+        ebrake_inner_layout = QFormLayout(self.ebrake_inner_widget)
+        ebrake_inner_layout.setContentsMargins(0, 0, 0, 0)
+        ebrake_inner_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        ebrake_inner_layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        self.ebrake_spin = QDoubleSpinBox()
+        self.ebrake_spin.setRange(0.1, 60.0)
+        self.ebrake_spin.setSingleStep(0.5)
+        self.ebrake_spin.setSuffix("s")
+        self.ebrake_spin.setValue(self.core.emergency_brake_timeout)
+        self.ebrake_spin.valueChanged.connect(self.on_ebrake_config_changed)
+        ebrake_inner_layout.addRow("Timeout:", self.ebrake_spin)
+
+        row_ebrake_key = QHBoxLayout()
+        self.ebrake_key_lbl = QLabel(self.core.emergency_brake_key)
+        self.ebrake_key_lbl.setStyleSheet(
+            "font-weight: bold; padding: 4px; background-color: rgba(0,0,0,0.1); border-radius: 4px;")
+        self.ebrake_key_btn = QPushButton("Rebind")
+        self.ebrake_key_btn.clicked.connect(self.start_rebind_ebrake)
+        row_ebrake_key.addWidget(self.ebrake_key_lbl, 1)
+        row_ebrake_key.addWidget(self.ebrake_key_btn)
+        ebrake_inner_layout.addRow("Base Key:", row_ebrake_key)
+
+        row_ebrake_mods = QHBoxLayout()
+        self.ebrake_ctrl_chk = QCheckBox("Ctrl")
+        self.ebrake_alt_chk = QCheckBox("Alt")
+        self.ebrake_shift_chk = QCheckBox("Shift")
+        self.ebrake_ctrl_chk.setChecked(self.core.emergency_brake_modifiers['ctrl'])
+        self.ebrake_alt_chk.setChecked(self.core.emergency_brake_modifiers['alt'])
+        self.ebrake_shift_chk.setChecked(self.core.emergency_brake_modifiers['shift'])
+        self.ebrake_ctrl_chk.stateChanged.connect(self.on_ebrake_config_changed)
+        self.ebrake_alt_chk.stateChanged.connect(self.on_ebrake_config_changed)
+        self.ebrake_shift_chk.stateChanged.connect(self.on_ebrake_config_changed)
+        row_ebrake_mods.addWidget(self.ebrake_ctrl_chk)
+        row_ebrake_mods.addWidget(self.ebrake_alt_chk)
+        row_ebrake_mods.addWidget(self.ebrake_shift_chk)
+        row_ebrake_mods.addStretch()
+        ebrake_inner_layout.addRow("Modifiers:", row_ebrake_mods)
+
+        ebrake_layout.addWidget(self.ebrake_inner_widget)
+        ebrake_group.setLayout(ebrake_layout)
+        self.main_layout.addWidget(ebrake_group)
+
+        self.on_ebrake_toggled()
+
         status_group = QGroupBox("Status")
         status_layout = QVBoxLayout()
         self.pressed_lbl = QLabel("Ready")
@@ -138,24 +194,53 @@ class SifaPedalUI(QMainWindow):
 
         self.main_layout.addStretch()
 
-    def start_rebind(self):
-        self.listening_for_key = True
+    def on_ebrake_toggled(self):
+        enabled = self.ebrake_chk.isChecked()
+        self.core.emergency_brake_enabled = enabled
+        self.ebrake_inner_widget.setEnabled(enabled)
+        self.core.save_config()
+
+    def on_ebrake_config_changed(self):
+        self.core.emergency_brake_timeout = self.ebrake_spin.value()
+        self.core.emergency_brake_modifiers['ctrl'] = self.ebrake_ctrl_chk.isChecked()
+        self.core.emergency_brake_modifiers['alt'] = self.ebrake_alt_chk.isChecked()
+        self.core.emergency_brake_modifiers['shift'] = self.ebrake_shift_chk.isChecked()
+        self.core.save_config()
+
+    def start_rebind_sifa(self):
+        self.rebind_target = 'sifa'
         self.key_lbl.setText("Press any key...")
         self.key_btn.setText("Cancel")
         self.key_btn.clicked.disconnect()
-        self.key_btn.clicked.connect(self.cancel_rebind)
+        self.key_btn.clicked.connect(self.cancel_rebind_sifa)
         self.setFocus()
 
-    def cancel_rebind(self):
-        self.listening_for_key = False
-        self.key_lbl.setText(self.core.base_key)
+    def cancel_rebind_sifa(self):
+        self.rebind_target = None
+        self.key_lbl.setText(self.core.sifa_base_key)
         self.key_btn.setText("Rebind")
         self.key_btn.clicked.disconnect()
-        self.key_btn.clicked.connect(self.start_rebind)
+        self.key_btn.clicked.connect(self.start_rebind_sifa)
+        self.core.save_config()
+
+    def start_rebind_ebrake(self):
+        self.rebind_target = 'ebrake'
+        self.ebrake_key_lbl.setText("Press any key...")
+        self.ebrake_key_btn.setText("Cancel")
+        self.ebrake_key_btn.clicked.disconnect()
+        self.ebrake_key_btn.clicked.connect(self.cancel_rebind_ebrake)
+        self.setFocus()
+
+    def cancel_rebind_ebrake(self):
+        self.rebind_target = None
+        self.ebrake_key_lbl.setText(self.core.emergency_brake_key)
+        self.ebrake_key_btn.setText("Rebind")
+        self.ebrake_key_btn.clicked.disconnect()
+        self.ebrake_key_btn.clicked.connect(self.start_rebind_ebrake)
         self.core.save_config()
 
     def keyPressEvent(self, event):
-        if not self.listening_for_key:
+        if not self.rebind_target:
             super().keyPressEvent(event)
             return
 
@@ -184,8 +269,12 @@ class SifaPedalUI(QMainWindow):
             if not key_str:
                 return
 
-        self.core.base_key = key_str
-        self.cancel_rebind()
+        if self.rebind_target == 'sifa':
+            self.core.sifa_base_key = key_str
+            self.cancel_rebind_sifa()
+        elif self.rebind_target == 'ebrake':
+            self.core.emergency_brake_key = key_str
+            self.cancel_rebind_ebrake()
 
     def refresh_joysticks(self):
         self.joysticks_data = self.core.refresh_joysticks()
@@ -234,10 +323,10 @@ class SifaPedalUI(QMainWindow):
             self.core.axis_index = index
             self.core.save_config()
 
-    def on_modifiers_changed(self):
-        self.core.modifiers['ctrl'] = self.ctrl_chk.isChecked()
-        self.core.modifiers['alt'] = self.alt_chk.isChecked()
-        self.core.modifiers['shift'] = self.shift_chk.isChecked()
+    def on_sifa_modifiers_changed(self):
+        self.core.sifa_modifiers['ctrl'] = self.ctrl_chk.isChecked()
+        self.core.sifa_modifiers['alt'] = self.alt_chk.isChecked()
+        self.core.sifa_modifiers['shift'] = self.shift_chk.isChecked()
         self.core.save_config()
 
     def on_sensitivity_changed(self):

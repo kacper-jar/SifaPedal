@@ -17,6 +17,7 @@ class PedalState(Enum):
     PEDAL_PRESSED = "Pedal pressed"
     WAITING_FOR_REPRESS = "Waiting for repress"
     SIFA_ACKNOWLEDGED = "Sifa acknowledged"
+    EMERGENCY_BRAKE = "Emergency brake applied"
 
 
 class SifaPedalCore:
@@ -37,8 +38,13 @@ class SifaPedalCore:
         self.deadzone = 0.05
         self.invert = False
 
-        self.base_key = 'space'
-        self.modifiers = {'ctrl': False, 'alt': False, 'shift': False}
+        self.sifa_base_key = 'space'
+        self.sifa_modifiers = {'ctrl': False, 'alt': False, 'shift': False}
+
+        self.emergency_brake_enabled = False
+        self.emergency_brake_timeout = 3.0
+        self.emergency_brake_key = 'backspace'
+        self.emergency_brake_modifiers = {'ctrl': False, 'alt': False, 'shift': False}
 
         self.target_joystick_name = ''
         self.load_config()
@@ -59,8 +65,14 @@ class SifaPedalCore:
                 self.threshold = config.get('threshold', 0.5)
                 self.deadzone = config.get('deadzone', 0.05)
                 self.invert = config.get('invert', False)
-                self.base_key = config.get('base_key', 'space')
-                self.modifiers = config.get('modifiers', {'ctrl': False, 'alt': False, 'shift': False})
+                self.sifa_base_key = config.get('sifa_base_key', config.get('base_key', 'space'))
+                self.sifa_modifiers = config.get('sifa_modifiers',
+                                                 config.get('modifiers', {'ctrl': False, 'alt': False, 'shift': False}))
+                self.emergency_brake_enabled = config.get('emergency_brake_enabled', False)
+                self.emergency_brake_timeout = config.get('emergency_brake_timeout', 3.0)
+                self.emergency_brake_key = config.get('emergency_brake_key', 'backspace')
+                self.emergency_brake_modifiers = config.get('emergency_brake_modifiers',
+                                                            {'ctrl': False, 'alt': False, 'shift': False})
                 self.target_joystick_name = config.get('joystick_name', '')
             except Exception as e:
                 print(f"Failed to load config: {e}")
@@ -76,8 +88,12 @@ class SifaPedalCore:
             'threshold': self.threshold,
             'deadzone': self.deadzone,
             'invert': self.invert,
-            'base_key': self.base_key,
-            'modifiers': self.modifiers
+            'sifa_base_key': self.sifa_base_key,
+            'sifa_modifiers': self.sifa_modifiers,
+            'emergency_brake_enabled': self.emergency_brake_enabled,
+            'emergency_brake_timeout': self.emergency_brake_timeout,
+            'emergency_brake_key': self.emergency_brake_key,
+            'emergency_brake_modifiers': self.emergency_brake_modifiers
         }
         try:
             with open(self.config_file, 'w') as f:
@@ -124,27 +140,49 @@ class SifaPedalCore:
             return KeyCode.from_char(key_str)
         return Key.space
 
-    def _press_keys(self):
-        if self.modifiers['ctrl']: self.keyboard.press(Key.ctrl)
-        if self.modifiers['alt']: self.keyboard.press(Key.alt)
-        if self.modifiers['shift']: self.keyboard.press(Key.shift)
+    def _press_sifa_keys(self):
+        if self.sifa_modifiers['ctrl']: self.keyboard.press(Key.ctrl)
+        if self.sifa_modifiers['alt']: self.keyboard.press(Key.alt)
+        if self.sifa_modifiers['shift']: self.keyboard.press(Key.shift)
 
-        key = self.parse_key(self.base_key)
+        key = self.parse_key(self.sifa_base_key)
         self.keyboard.press(key)
 
-    def _release_keys(self):
-        key = self.parse_key(self.base_key)
+    def _release_sifa_keys(self):
+        key = self.parse_key(self.sifa_base_key)
         self.keyboard.release(key)
 
-        if self.modifiers['shift']: self.keyboard.release(Key.shift)
-        if self.modifiers['alt']: self.keyboard.release(Key.alt)
-        if self.modifiers['ctrl']: self.keyboard.release(Key.ctrl)
+        if self.sifa_modifiers['shift']: self.keyboard.release(Key.shift)
+        if self.sifa_modifiers['alt']: self.keyboard.release(Key.alt)
+        if self.sifa_modifiers['ctrl']: self.keyboard.release(Key.ctrl)
 
     def tap_keys(self):
         """Briefly press and release keys."""
-        self._press_keys()
+        self._press_sifa_keys()
         time.sleep(0.05)
-        self._release_keys()
+        self._release_sifa_keys()
+
+    def _press_emergency_brake_keys(self):
+        if self.emergency_brake_modifiers['ctrl']: self.keyboard.press(Key.ctrl)
+        if self.emergency_brake_modifiers['alt']: self.keyboard.press(Key.alt)
+        if self.emergency_brake_modifiers['shift']: self.keyboard.press(Key.shift)
+
+        key = self.parse_key(self.emergency_brake_key)
+        self.keyboard.press(key)
+
+    def _release_emergency_brake_keys(self):
+        key = self.parse_key(self.emergency_brake_key)
+        self.keyboard.release(key)
+
+        if self.emergency_brake_modifiers['shift']: self.keyboard.release(Key.shift)
+        if self.emergency_brake_modifiers['alt']: self.keyboard.release(Key.alt)
+        if self.emergency_brake_modifiers['ctrl']: self.keyboard.release(Key.ctrl)
+
+    def tap_emergency_brake_keys(self):
+        """Briefly press and release emergency brake keys."""
+        self._press_emergency_brake_keys()
+        time.sleep(0.05)
+        self._release_emergency_brake_keys()
 
     def tick(self):
         """
@@ -193,7 +231,7 @@ class SifaPedalCore:
 
         if currently_pressed and not self.is_pressed:
             self.is_pressed = True
-            if self.state == PedalState.WAITING_FOR_REPRESS:
+            if self.state in (PedalState.WAITING_FOR_REPRESS, PedalState.EMERGENCY_BRAKE):
                 self.set_state(PedalState.SIFA_ACKNOWLEDGED)
                 threading.Thread(target=self.tap_keys, daemon=True).start()
             else:
@@ -206,14 +244,15 @@ class SifaPedalCore:
         time_since_action = time.time() - self.last_action_time
 
         if self.state == PedalState.SIFA_ACKNOWLEDGED:
-            if time_since_action > 30.0:
-                self.set_state(PedalState.READY)
-            elif time_since_action > 5.0:
+            if time_since_action > 5.0:
                 self.state = PedalState.PEDAL_PRESSED
-        elif self.state == PedalState.PEDAL_PRESSED:
-            if time_since_action > 30.0:
-                self.set_state(PedalState.READY)
         elif self.state == PedalState.WAITING_FOR_REPRESS:
+            if self.emergency_brake_enabled and time_since_action > self.emergency_brake_timeout:
+                self.set_state(PedalState.EMERGENCY_BRAKE)
+                threading.Thread(target=self.tap_emergency_brake_keys, daemon=True).start()
+            elif time_since_action > 30.0:
+                self.set_state(PedalState.READY)
+        elif self.state == PedalState.EMERGENCY_BRAKE:
             if time_since_action > 30.0:
                 self.set_state(PedalState.READY)
 
