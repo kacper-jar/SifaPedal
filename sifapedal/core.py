@@ -12,10 +12,11 @@ from sifapedal import Utils
 
 
 class PedalState(Enum):
+    NO_JOYSTICK = "No joystick/axis selected"
     READY = "Ready"
     PEDAL_PRESSED = "Pedal pressed"
     WAITING_FOR_REPRESS = "Waiting for repress"
-    SIFA_ACKNOWLEDGED = "Sifa Acknowledged"
+    SIFA_ACKNOWLEDGED = "Sifa acknowledged"
 
 
 class SifaPedalCore:
@@ -46,7 +47,7 @@ class SifaPedalCore:
         self.running = False
         self.has_moved = False
 
-        self.state = PedalState.READY
+        self.state = PedalState.NO_JOYSTICK
         self.last_action_time = 0.0
 
     def load_config(self):
@@ -154,12 +155,17 @@ class SifaPedalCore:
         pygame.event.pump()
 
         if self.joystick is None:
+            self.set_state(PedalState.NO_JOYSTICK)
             return 0.0
 
         try:
             raw_value = self.joystick.get_axis(self.axis_index)
         except pygame.error:
+            self.set_state(PedalState.NO_JOYSTICK)
             return 0.0
+
+        if self.state == PedalState.NO_JOYSTICK:
+            self.set_state(PedalState.READY)
 
         if not self.has_moved:
             if abs(raw_value) < 0.05:
