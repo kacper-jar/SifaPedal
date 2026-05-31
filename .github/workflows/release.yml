@@ -58,6 +58,14 @@ jobs:
           cd packaging/windows/Output
           mv SifaPedal-windows-setup.exe SifaPedal-${{ steps.meta.outputs.version }}-setup.exe
 
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: SifaPedal-Windows
+          path: |
+            dist/SifaPedal-*-portable.exe
+            packaging/windows/Output/SifaPedal-*-setup.exe
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         if: github.ref_type == 'tag'
