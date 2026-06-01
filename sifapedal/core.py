@@ -3,7 +3,7 @@ import os
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 
 import pygame
-from pynput.keyboard import Controller, Key, KeyCode
+from pynput.keyboard import Controller, Key, KeyCode, Listener
 import threading
 import time
 import json
@@ -18,6 +18,7 @@ class PedalState(Enum):
     WAITING_FOR_REPRESS = "Waiting for repress"
     SIFA_ACKNOWLEDGED = "Sifa acknowledged"
     EMERGENCY_BRAKE = "Emergency brake applied"
+    PAUSED = "Paused (Station Mode)"
 
 
 class SifaPedalCore:
@@ -47,14 +48,21 @@ class SifaPedalCore:
         self.emergency_brake_modifiers = {'ctrl': False, 'alt': False, 'shift': False}
 
         self.target_joystick_name = ''
+        self.station_mode_key = '\\'
+        self.station_mode_modifiers = {'ctrl': False, 'alt': False, 'shift': False}
         self.load_config()
 
         self.is_pressed = False
         self.running = False
         self.has_moved = False
+        self.is_paused = False
 
         self.state = PedalState.NO_JOYSTICK
         self.last_action_time = 0.0
+
+        self.current_modifiers = set()
+        self.listener = Listener(on_press=self.on_key_press, on_release=self.on_key_release)
+        self.listener.start()
 
     def load_config(self):
         if os.path.exists(self.config_file):
@@ -73,6 +81,9 @@ class SifaPedalCore:
                 self.emergency_brake_key = config.get('emergency_brake_key', 'backspace')
                 self.emergency_brake_modifiers = config.get('emergency_brake_modifiers',
                                                             {'ctrl': False, 'alt': False, 'shift': False})
+                self.station_mode_key = config.get('station_mode_key', '\\')
+                self.station_mode_modifiers = config.get('station_mode_modifiers',
+                                                         {'ctrl': False, 'alt': False, 'shift': False})
                 self.target_joystick_name = config.get('joystick_name', '')
             except Exception as e:
                 print(f"Failed to load config: {e}")
@@ -93,7 +104,9 @@ class SifaPedalCore:
             'emergency_brake_enabled': self.emergency_brake_enabled,
             'emergency_brake_timeout': self.emergency_brake_timeout,
             'emergency_brake_key': self.emergency_brake_key,
-            'emergency_brake_modifiers': self.emergency_brake_modifiers
+            'emergency_brake_modifiers': self.emergency_brake_modifiers,
+            'station_mode_key': self.station_mode_key,
+            'station_mode_modifiers': self.station_mode_modifiers
         }
         try:
             with open(self.config_file, 'w') as f:
@@ -184,6 +197,42 @@ class SifaPedalCore:
         time.sleep(0.05)
         self._release_emergency_brake_keys()
 
+    def toggle_pause(self):
+        self.is_paused = not self.is_paused
+        if self.is_paused:
+            self.set_state(PedalState.PAUSED)
+        else:
+            self.set_state(PedalState.READY if self.joystick else PedalState.NO_JOYSTICK)
+            self.has_moved = False
+            self.is_pressed = False
+
+    def on_key_press(self, key):
+        if hasattr(key, 'name'):
+            if key.name in ('ctrl', 'ctrl_l', 'ctrl_r'): self.current_modifiers.add('ctrl')
+            if key.name in ('alt', 'alt_l', 'alt_r', 'alt_gr'): self.current_modifiers.add('alt')
+            if key.name in ('shift', 'shift_l', 'shift_r'): self.current_modifiers.add('shift')
+
+        target_key = self.parse_key(self.station_mode_key)
+
+        match = False
+        if hasattr(key, 'char') and hasattr(target_key, 'char'):
+            if key.char and target_key.char and key.char.lower() == target_key.char.lower():
+                match = True
+        elif key == target_key:
+            match = True
+
+        if match:
+            if (self.station_mode_modifiers['ctrl'] == ('ctrl' in self.current_modifiers) and
+                    self.station_mode_modifiers['alt'] == ('alt' in self.current_modifiers) and
+                    self.station_mode_modifiers['shift'] == ('shift' in self.current_modifiers)):
+                self.toggle_pause()
+
+    def on_key_release(self, key):
+        if hasattr(key, 'name'):
+            if key.name in ('ctrl', 'ctrl_l', 'ctrl_r'): self.current_modifiers.discard('ctrl')
+            if key.name in ('alt', 'alt_l', 'alt_r', 'alt_gr'): self.current_modifiers.discard('alt')
+            if key.name in ('shift', 'shift_l', 'shift_r'): self.current_modifiers.discard('shift')
+
     def tick(self):
         """
         To be called periodically (e.g. from UI main loop or a thread).
@@ -193,14 +242,22 @@ class SifaPedalCore:
         pygame.event.pump()
 
         if self.joystick is None:
-            self.set_state(PedalState.NO_JOYSTICK)
+            if not self.is_paused:
+                self.set_state(PedalState.NO_JOYSTICK)
             return 0.0
 
         try:
             raw_value = self.joystick.get_axis(self.axis_index)
         except pygame.error:
-            self.set_state(PedalState.NO_JOYSTICK)
+            if not self.is_paused:
+                self.set_state(PedalState.NO_JOYSTICK)
             return 0.0
+
+        if self.is_paused:
+            val = (raw_value + 1.0) / 2.0
+            if self.invert: val = 1.0 - val
+            if val < self.deadzone: val = 0.0
+            return val
 
         if self.state == PedalState.NO_JOYSTICK:
             self.set_state(PedalState.READY)
@@ -259,4 +316,6 @@ class SifaPedalCore:
         return val
 
     def cleanup(self):
+        if hasattr(self, 'listener'):
+            self.listener.stop()
         pygame.quit()

@@ -15,8 +15,8 @@ class SifaPedalUI(QMainWindow):
         self.core = core
 
         self.setWindowTitle(f"SifaPedal {__version__}")
-        self.setMinimumSize(400, 580)
-        self.setMaximumSize(400, 580)
+        self.setMinimumSize(400, 760)
+        self.setMaximumSize(400, 760)
 
         self.rebind_target = None
 
@@ -184,6 +184,48 @@ class SifaPedalUI(QMainWindow):
 
         self.on_ebrake_toggled()
 
+        station_group = QGroupBox("Station Mode (Sifa Pause)")
+        station_layout = QFormLayout()
+        station_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        station_layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        desc_lbl = QLabel(
+            "Temporarily prevents emergency brake activation caused by releasing the pedal while stopped at a station."
+            "\nPress the selected below keybind when you stop at the station and leave the station or disable automatic"
+            " emergency break.")
+        desc_lbl.setWordWrap(True)
+        desc_lbl.setStyleSheet("color: gray; font-style: italic; margin-bottom: 4px;")
+        station_layout.addRow(desc_lbl)
+
+        row_station_key = QHBoxLayout()
+        self.station_key_lbl = QLabel(self.core.station_mode_key)
+        self.station_key_lbl.setStyleSheet(
+            "font-weight: bold; padding: 4px; background-color: rgba(0,0,0,0.1); border-radius: 4px;")
+        self.station_key_btn = QPushButton("Rebind")
+        self.station_key_btn.clicked.connect(self.start_rebind_station)
+        row_station_key.addWidget(self.station_key_lbl, 1)
+        row_station_key.addWidget(self.station_key_btn)
+        station_layout.addRow("Toggle Key:", row_station_key)
+
+        row_station_mods = QHBoxLayout()
+        self.station_ctrl_chk = QCheckBox("Ctrl")
+        self.station_alt_chk = QCheckBox("Alt")
+        self.station_shift_chk = QCheckBox("Shift")
+        self.station_ctrl_chk.setChecked(self.core.station_mode_modifiers['ctrl'])
+        self.station_alt_chk.setChecked(self.core.station_mode_modifiers['alt'])
+        self.station_shift_chk.setChecked(self.core.station_mode_modifiers['shift'])
+        self.station_ctrl_chk.stateChanged.connect(self.on_station_mods_changed)
+        self.station_alt_chk.stateChanged.connect(self.on_station_mods_changed)
+        self.station_shift_chk.stateChanged.connect(self.on_station_mods_changed)
+        row_station_mods.addWidget(self.station_ctrl_chk)
+        row_station_mods.addWidget(self.station_alt_chk)
+        row_station_mods.addWidget(self.station_shift_chk)
+        row_station_mods.addStretch()
+        station_layout.addRow("Modifiers:", row_station_mods)
+
+        station_group.setLayout(station_layout)
+        self.main_layout.addWidget(station_group)
+
         status_group = QGroupBox("Status")
         status_layout = QVBoxLayout()
         self.pressed_lbl = QLabel("Ready")
@@ -239,6 +281,28 @@ class SifaPedalUI(QMainWindow):
         self.ebrake_key_btn.clicked.connect(self.start_rebind_ebrake)
         self.core.save_config()
 
+    def on_station_mods_changed(self):
+        self.core.station_mode_modifiers['ctrl'] = self.station_ctrl_chk.isChecked()
+        self.core.station_mode_modifiers['alt'] = self.station_alt_chk.isChecked()
+        self.core.station_mode_modifiers['shift'] = self.station_shift_chk.isChecked()
+        self.core.save_config()
+
+    def start_rebind_station(self):
+        self.rebind_target = 'station'
+        self.station_key_lbl.setText("Press any key...")
+        self.station_key_btn.setText("Cancel")
+        self.station_key_btn.clicked.disconnect()
+        self.station_key_btn.clicked.connect(self.cancel_rebind_station)
+        self.setFocus()
+
+    def cancel_rebind_station(self):
+        self.rebind_target = None
+        self.station_key_lbl.setText(self.core.station_mode_key)
+        self.station_key_btn.setText("Rebind")
+        self.station_key_btn.clicked.disconnect()
+        self.station_key_btn.clicked.connect(self.start_rebind_station)
+        self.core.save_config()
+
     def keyPressEvent(self, event):
         if not self.rebind_target:
             super().keyPressEvent(event)
@@ -275,6 +339,9 @@ class SifaPedalUI(QMainWindow):
         elif self.rebind_target == 'ebrake':
             self.core.emergency_brake_key = key_str
             self.cancel_rebind_ebrake()
+        elif self.rebind_target == 'station':
+            self.core.station_mode_key = key_str
+            self.cancel_rebind_station()
 
     def refresh_joysticks(self):
         self.joysticks_data = self.core.refresh_joysticks()
@@ -344,7 +411,7 @@ class SifaPedalUI(QMainWindow):
         self.axis_prog.setValue(int(val * 100))
 
         self.pressed_lbl.setText(self.core.state.value)
-        if self.core.state == PedalState.READY:
+        if self.core.state in (PedalState.READY, PedalState.PAUSED):
             self.pressed_lbl.setStyleSheet("color: gray; font-weight: bold;")
         elif self.core.state in (PedalState.PEDAL_PRESSED, PedalState.SIFA_ACKNOWLEDGED):
             self.pressed_lbl.setStyleSheet("color: green; font-weight: bold;")
