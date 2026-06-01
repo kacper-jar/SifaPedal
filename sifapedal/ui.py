@@ -74,7 +74,7 @@ class SifaPedalUI(QMainWindow):
         self.thresh_slider.setValue(int(self.core.threshold * 100))
         self.thresh_slider.valueChanged.connect(self.on_sensitivity_changed)
         row_thresh.addWidget(self.thresh_slider)
-        self.thresh_lbl = QLabel(f"{self.core.threshold:.2f}")
+        self.thresh_lbl = QLabel(f"{int(self.core.threshold * 100)}%")
         row_thresh.addWidget(self.thresh_lbl)
         sens_layout.addRow("Threshold:", row_thresh)
 
@@ -84,7 +84,7 @@ class SifaPedalUI(QMainWindow):
         self.dead_slider.setValue(int(self.core.deadzone * 100))
         self.dead_slider.valueChanged.connect(self.on_sensitivity_changed)
         row_dead.addWidget(self.dead_slider)
-        self.dead_lbl = QLabel(f"{self.core.deadzone:.2f}")
+        self.dead_lbl = QLabel(f"{int(self.core.deadzone * 100)}%")
         row_dead.addWidget(self.dead_lbl)
         sens_layout.addRow("Deadzone:", row_dead)
 
@@ -402,8 +402,8 @@ class SifaPedalUI(QMainWindow):
         self.core.threshold = t
         self.core.deadzone = d
         self.core.invert = self.invert_chk.isChecked()
-        self.thresh_lbl.setText(f"{t:.2f}")
-        self.dead_lbl.setText(f"{d:.2f}")
+        self.thresh_lbl.setText(f"{int(t * 100)}%")
+        self.dead_lbl.setText(f"{int(d * 100)}%")
         self.core.save_config()
 
     def poll_core(self):
