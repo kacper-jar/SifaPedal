@@ -41,13 +41,13 @@ jobs:
           echo "author=$AUTHOR" >> $GITHUB_OUTPUT
           echo "name=$NAME" >> $GITHUB_OUTPUT
 
-      - name: Build executable
+      - name: Build Executable
         run: pyinstaller --onefile --windowed --name SifaPedal sifapedal/__main__.py
 
       - name: Prepare Portable Executable
         shell: bash
         run: |
-          mv dist/SifaPedal.exe dist/SifaPedal-portable.exe
+          cp dist/SifaPedal.exe dist/SifaPedal-portable.exe
 
       - name: Build Installer
         run: iscc /DMyAppName="${{ steps.meta.outputs.name }}" /DMyAppVersion="${{ steps.meta.outputs.version }}" /DMyAppPublisher="${{ steps.meta.outputs.author }}" packaging\windows\installer.iss
