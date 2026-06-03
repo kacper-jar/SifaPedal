@@ -190,9 +190,9 @@ class SifaPedalUI(QMainWindow):
         station_layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
 
         desc_lbl = QLabel(
-            "Temporarily prevents emergency brake activation caused by releasing the pedal while stopped at a station."
-            "\nPress the selected below keybind when you stop at the station and leave the station or disable automatic"
-            " emergency break.")
+            "Station mode allows you to lift the pedal without triggering the emergency brake while stopped at a station.\n"
+            "Press the keybind below to toggle this mode when you arrive at or depart from a station."
+        )
         desc_lbl.setWordWrap(True)
         desc_lbl.setStyleSheet("color: gray; font-style: italic; margin-bottom: 4px;")
         station_layout.addRow(desc_lbl)
