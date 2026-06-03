@@ -4,4 +4,4 @@ from .utils import Utils
 from .core import SifaPedalCore, PedalState
 from .ui import SifaPedalUI
 
-__all__ = ["Utils", "SifaPedalCore", "PedalState", "SifaPedalUI"]
+__all__ = ["__version__", "Utils", "SifaPedalCore", "PedalState", "SifaPedalUI"]
