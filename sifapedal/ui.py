@@ -2,7 +2,7 @@ import sys
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QGroupBox, QLabel, QComboBox, QPushButton, QCheckBox,
-    QSlider, QFormLayout, QProgressBar, QDoubleSpinBox
+    QSlider, QFormLayout, QProgressBar, QDoubleSpinBox, QTabWidget
 )
 from PyQt6.QtCore import Qt, QTimer
 
@@ -15,8 +15,8 @@ class SifaPedalUI(QMainWindow):
         self.core = core
 
         self.setWindowTitle(f"SifaPedal {__version__}")
-        self.setMinimumSize(400, 760)
-        self.setMaximumSize(400, 760)
+        self.setMinimumSize(400, 600)
+        self.setMaximumSize(400, 600)
 
         self.rebind_target = None
 
@@ -32,6 +32,54 @@ class SifaPedalUI(QMainWindow):
         self.timer.start(20)
 
     def create_widgets(self):
+        self.tabs = QTabWidget()
+        self.main_layout.addWidget(self.tabs)
+
+        self.tab_home = QWidget()
+        home_layout = QVBoxLayout(self.tab_home)
+
+        title_lbl = QLabel("SifaPedal")
+        title_lbl.setStyleSheet("font-size: 24px; font-weight: bold;")
+        title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        home_layout.addWidget(title_lbl)
+
+        version_lbl = QLabel(f"{__version__}")
+        version_lbl.setStyleSheet("font-size: 14px; color: gray;")
+        version_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        home_layout.addWidget(version_lbl)
+
+        desc_lbl = QLabel(
+            "SifaPedal maps a physical steering wheel pedal to a customized keyboard stroke, "
+            "turning it into a functional Sifa (dead-man's switch) pedal for PC train simulators.\n\n"
+            "To send an acknowledgment, it requires a full cycle of lifting and repressing the pedal. "
+            "It also features an optional emergency brake system that automatically activates if the pedal "
+            "is released and not repressed within a specified time limit."
+        )
+        desc_lbl.setWordWrap(True)
+        desc_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        home_layout.addWidget(desc_lbl)
+
+        home_layout.addStretch()
+
+        link_lbl = QLabel("<a href='https://github.com/kacper-jar/SifaPedal'>GitHub Repository</a>")
+        link_lbl.setOpenExternalLinks(True)
+        link_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        home_layout.addWidget(link_lbl)
+
+        status_group = QGroupBox("Status")
+        status_layout = QVBoxLayout()
+        self.pressed_lbl = QLabel("Ready")
+        self.pressed_lbl.setStyleSheet("color: gray; font-weight: bold; font-size: 16px;")
+        self.pressed_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        status_layout.addWidget(self.pressed_lbl)
+        status_group.setLayout(status_layout)
+        home_layout.addWidget(status_group)
+
+        self.tabs.addTab(self.tab_home, "Home")
+
+        self.tab_device = QWidget()
+        device_layout = QVBoxLayout(self.tab_device)
+
         dev_group = QGroupBox("Device Configuration")
         dev_layout = QFormLayout()
         dev_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
@@ -55,7 +103,7 @@ class SifaPedalUI(QMainWindow):
         dev_layout.addRow("Axis:", self.axis_cb)
 
         dev_group.setLayout(dev_layout)
-        self.main_layout.addWidget(dev_group)
+        device_layout.addWidget(dev_group)
 
         sens_group = QGroupBox("Pedal Configuration")
         sens_layout = QFormLayout()
@@ -94,7 +142,13 @@ class SifaPedalUI(QMainWindow):
         sens_layout.addRow("", self.invert_chk)
 
         sens_group.setLayout(sens_layout)
-        self.main_layout.addWidget(sens_group)
+        device_layout.addWidget(sens_group)
+        device_layout.addStretch()
+
+        self.tabs.addTab(self.tab_device, "Device")
+
+        self.tab_game = QWidget()
+        game_layout = QVBoxLayout(self.tab_game)
 
         key_group = QGroupBox("In-game Sifa")
         key_layout = QFormLayout()
@@ -128,7 +182,7 @@ class SifaPedalUI(QMainWindow):
         key_layout.addRow("Modifiers:", row_mods)
 
         key_group.setLayout(key_layout)
-        self.main_layout.addWidget(key_group)
+        game_layout.addWidget(key_group)
 
         ebrake_group = QGroupBox("In-game Emergency Brake")
         ebrake_layout = QVBoxLayout()
@@ -180,7 +234,7 @@ class SifaPedalUI(QMainWindow):
 
         ebrake_layout.addWidget(self.ebrake_inner_widget)
         ebrake_group.setLayout(ebrake_layout)
-        self.main_layout.addWidget(ebrake_group)
+        game_layout.addWidget(ebrake_group)
 
         self.on_ebrake_toggled()
 
@@ -189,13 +243,13 @@ class SifaPedalUI(QMainWindow):
         station_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         station_layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        desc_lbl = QLabel(
+        station_desc_lbl = QLabel(
             "Station mode allows you to lift the pedal without triggering the emergency brake while stopped at a station.\n"
             "Press the keybind below to toggle this mode when you arrive at or depart from a station."
         )
-        desc_lbl.setWordWrap(True)
-        desc_lbl.setStyleSheet("color: gray; font-style: italic; margin-bottom: 4px;")
-        station_layout.addRow(desc_lbl)
+        station_desc_lbl.setWordWrap(True)
+        station_desc_lbl.setStyleSheet("color: gray; font-style: italic; margin-bottom: 4px;")
+        station_layout.addRow(station_desc_lbl)
 
         row_station_key = QHBoxLayout()
         self.station_key_lbl = QLabel(self.core.station_mode_key)
@@ -224,17 +278,10 @@ class SifaPedalUI(QMainWindow):
         station_layout.addRow("Modifiers:", row_station_mods)
 
         station_group.setLayout(station_layout)
-        self.main_layout.addWidget(station_group)
+        game_layout.addWidget(station_group)
+        game_layout.addStretch()
 
-        status_group = QGroupBox("Status")
-        status_layout = QVBoxLayout()
-        self.pressed_lbl = QLabel("Ready")
-        self.pressed_lbl.setStyleSheet("color: gray; font-weight: bold;")
-        status_layout.addWidget(self.pressed_lbl)
-        status_group.setLayout(status_layout)
-        self.main_layout.addWidget(status_group)
-
-        self.main_layout.addStretch()
+        self.tabs.addTab(self.tab_game, "Game")
 
     def on_ebrake_toggled(self):
         enabled = self.ebrake_chk.isChecked()
