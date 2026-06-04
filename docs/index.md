@@ -41,6 +41,8 @@ SifaPedal maps a physical steering wheel pedal to a customized keyboard stroke, 
 
 <center markdown>
 
+[Browse releases](https://github.com/kacper-jar/SifaPedal/releases/){ .md-button }
+
 ## How to use
 
 </center>
