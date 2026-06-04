@@ -232,9 +232,29 @@ class SifaPedalCore:
         if self.is_paused:
             self.set_state(PedalState.PAUSED)
         else:
-            self.set_state(PedalState.READY if self.joystick else PedalState.NO_JOYSTICK)
-            self.has_moved = False
-            self.is_pressed = False
+            if not self.joystick:
+                self.set_state(PedalState.NO_JOYSTICK)
+                self.is_pressed = False
+                self.has_moved = False
+            else:
+                try:
+                    raw_value = self.joystick.get_axis(self.axis_index)
+                    val = (raw_value + 1.0) / 2.0
+                    if self.invert: val = 1.0 - val
+                    if val < self.deadzone: val = 0.0
+                    
+                    currently_pressed = (val >= self.threshold)
+                    self.is_pressed = currently_pressed
+                    self.has_moved = True
+                    
+                    if currently_pressed:
+                        self.set_state(PedalState.PEDAL_PRESSED)
+                    else:
+                        self.set_state(PedalState.WAITING_FOR_REPRESS)
+                except pygame.error:
+                    self.set_state(PedalState.READY)
+                    self.is_pressed = False
+                    self.has_moved = False
 
     def on_key_press(self, key):
         if hasattr(key, 'name'):
