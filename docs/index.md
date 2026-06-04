@@ -7,7 +7,9 @@ hide:
 
 <center markdown>
 
-![SifaPedal window](imgs/index.png){ width="200" }
+![SifaPedal Home tab](imgs/index1.png){ width="200" }
+![SifaPedal Device tab](imgs/index2.png){ width="200" }
+![SifaPedal Game tab](imgs/index3.png){ width="200" }
 
 # SifaPedal
 
