@@ -1,3 +1,4 @@
 pygame>=2.6.0
 pynput>=1.8.0
 PyQt6>=6.11.0
+pymem>=1.14.0

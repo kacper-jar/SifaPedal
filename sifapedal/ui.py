@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QTimer
 
-from sifapedal import __version__, PedalState
+from sifapedal import __version__, PedalState, StationModeType
 
 
 class SifaPedalUI(QMainWindow):
@@ -244,12 +244,30 @@ class SifaPedalUI(QMainWindow):
         station_layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
 
         station_desc_lbl = QLabel(
-            "Station mode allows you to lift the pedal without triggering the emergency brake while stopped at a station.\n"
-            "Press the keybind below to toggle this mode when you arrive at or depart from a station."
+            "Station mode allows you to lift the pedal without triggering the emergency brake while stopped at a "
+            "station.\nChoose 'Manual' to use a keybind or 'Automatic' to use the selected simulator hook."
         )
         station_desc_lbl.setWordWrap(True)
         station_desc_lbl.setStyleSheet("color: gray; font-style: italic; margin-bottom: 4px;")
         station_layout.addRow(station_desc_lbl)
+
+        self.station_mode_cb = QComboBox()
+        self.station_mode_cb.addItem("Manual (Keybind)", StationModeType.MANUAL)
+        self.station_mode_cb.addItem("Automatic (MaSzyna)", StationModeType.HOOK_MASZYNA)
+        idx = 0 if self.core.station_mode_type == StationModeType.MANUAL else 1
+        self.station_mode_cb.setCurrentIndex(idx)
+        self.station_mode_cb.currentIndexChanged.connect(self.on_station_mode_type_changed)
+        station_layout.addRow("Mode:", self.station_mode_cb)
+
+        self.telemetry_lbl = QLabel("")
+        self.telemetry_lbl.setStyleSheet("color: #0088cc; font-weight: bold;")
+        station_layout.addRow("Telemetry:", self.telemetry_lbl)
+
+        self.manual_station_widget = QWidget()
+        manual_station_layout = QFormLayout(self.manual_station_widget)
+        manual_station_layout.setContentsMargins(0, 0, 0, 0)
+        manual_station_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        manual_station_layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
 
         row_station_key = QHBoxLayout()
         self.station_key_lbl = QLabel(self.core.station_mode_key)
@@ -259,7 +277,7 @@ class SifaPedalUI(QMainWindow):
         self.station_key_btn.clicked.connect(self.start_rebind_station)
         row_station_key.addWidget(self.station_key_lbl, 1)
         row_station_key.addWidget(self.station_key_btn)
-        station_layout.addRow("Toggle Key:", row_station_key)
+        manual_station_layout.addRow("Toggle Key:", row_station_key)
 
         row_station_mods = QHBoxLayout()
         self.station_ctrl_chk = QCheckBox("Ctrl")
@@ -275,13 +293,34 @@ class SifaPedalUI(QMainWindow):
         row_station_mods.addWidget(self.station_alt_chk)
         row_station_mods.addWidget(self.station_shift_chk)
         row_station_mods.addStretch()
-        station_layout.addRow("Modifiers:", row_station_mods)
+        manual_station_layout.addRow("Modifiers:", row_station_mods)
 
+        station_layout.addRow(self.manual_station_widget)
         station_group.setLayout(station_layout)
         game_layout.addWidget(station_group)
         game_layout.addStretch()
 
+        self.on_station_mode_type_changed(idx)
+
         self.tabs.addTab(self.tab_game, "Game")
+
+    def on_station_mode_type_changed(self, index):
+        mode = self.station_mode_cb.itemData(index)
+        self.core.station_mode_type = mode
+
+        telemetry_label_item = self.station_mode_cb.parent().layout().labelForField(self.telemetry_lbl)
+
+        if mode == StationModeType.MANUAL:
+            self.manual_station_widget.setVisible(True)
+            self.telemetry_lbl.setVisible(False)
+            if telemetry_label_item: telemetry_label_item.setVisible(False)
+        else:
+            self.manual_station_widget.setVisible(False)
+            self.telemetry_lbl.setVisible(True)
+            if telemetry_label_item: telemetry_label_item.setVisible(True)
+
+        self.core.save_config()
+        self.core._update_hooks()
 
     def on_ebrake_toggled(self):
         enabled = self.ebrake_chk.isChecked()
@@ -459,11 +498,24 @@ class SifaPedalUI(QMainWindow):
 
         self.pressed_lbl.setText(self.core.state.value)
         if self.core.state in (PedalState.READY, PedalState.PAUSED):
-            self.pressed_lbl.setStyleSheet("color: gray; font-weight: bold;")
+            self.pressed_lbl.setStyleSheet("color: gray; font-weight: bold; font-size: 16px;")
         elif self.core.state in (PedalState.PEDAL_PRESSED, PedalState.SIFA_ACKNOWLEDGED):
-            self.pressed_lbl.setStyleSheet("color: green; font-weight: bold;")
+            self.pressed_lbl.setStyleSheet("color: green; font-weight: bold; font-size: 16px;")
         else:
-            self.pressed_lbl.setStyleSheet("color: red; font-weight: bold;")
+            self.pressed_lbl.setStyleSheet("color: red; font-weight: bold; font-size: 16px;")
+
+        if self.core.station_mode_type == StationModeType.HOOK_MASZYNA:
+            hook = self.core.maszyna_hook
+            if hook:
+                if hook.is_connected and hook.current_speed_kmh is not None:
+                    self.telemetry_lbl.setText(f"Connected | {hook.current_speed_kmh:.1f} km/h")
+                    self.telemetry_lbl.setStyleSheet("color: green; font-weight: bold;")
+                else:
+                    msg = hook.status_message
+                    if not msg and hook.error_message:
+                        msg = f"Error: {hook.error_message}"
+                    self.telemetry_lbl.setText(msg or "Disconnected")
+                    self.telemetry_lbl.setStyleSheet("color: red; font-weight: bold;")
 
     def closeEvent(self, event):
         self.core.cleanup()

@@ -9,6 +9,7 @@ import time
 import json
 from enum import Enum
 from sifapedal import Utils
+from sifapedal.hooks import MaszynaHook
 
 
 class PedalState(Enum):
@@ -19,6 +20,11 @@ class PedalState(Enum):
     SIFA_ACKNOWLEDGED = "Sifa acknowledged"
     EMERGENCY_BRAKE = "Emergency brake applied"
     PAUSED = "Paused (Station Mode)"
+
+
+class StationModeType(str, Enum):
+    MANUAL = "manual"
+    HOOK_MASZYNA = "maszyna"
 
 
 class SifaPedalCore:
@@ -50,6 +56,9 @@ class SifaPedalCore:
         self.target_joystick_name = ''
         self.station_mode_key = '\\'
         self.station_mode_modifiers = {'ctrl': False, 'alt': False, 'shift': False}
+        self.station_mode_type = StationModeType.MANUAL
+        self.maszyna_hook = None
+        self.auto_paused = False
         self.load_config()
 
         self.is_pressed = False
@@ -84,7 +93,13 @@ class SifaPedalCore:
                 self.station_mode_key = config.get('station_mode_key', '\\')
                 self.station_mode_modifiers = config.get('station_mode_modifiers',
                                                          {'ctrl': False, 'alt': False, 'shift': False})
+                try:
+                    self.station_mode_type = StationModeType(config.get('station_mode_type', 'manual'))
+                except ValueError:
+                    self.station_mode_type = StationModeType.MANUAL
                 self.target_joystick_name = config.get('joystick_name', '')
+
+                self._update_hooks()
             except Exception as e:
                 print(f"Failed to load config: {e}")
 
@@ -106,13 +121,28 @@ class SifaPedalCore:
             'emergency_brake_key': self.emergency_brake_key,
             'emergency_brake_modifiers': self.emergency_brake_modifiers,
             'station_mode_key': self.station_mode_key,
-            'station_mode_modifiers': self.station_mode_modifiers
+            'station_mode_modifiers': self.station_mode_modifiers,
+            'station_mode_type': self.station_mode_type.value
         }
         try:
             with open(self.config_file, 'w') as f:
                 json.dump(config, f, indent=4)
         except Exception as e:
             print(f"Failed to save config: {e}")
+
+    def _update_hooks(self):
+        if self.station_mode_type == StationModeType.HOOK_MASZYNA:
+            if self.maszyna_hook is None:
+                self.maszyna_hook = MaszynaHook()
+        else:
+            if self.maszyna_hook is not None:
+                self.maszyna_hook.stop()
+                self.maszyna_hook = None
+
+        if self.station_mode_type != StationModeType.HOOK_MASZYNA and self.auto_paused:
+            self.auto_paused = False
+            if self.is_paused:
+                self.toggle_pause()
 
     def refresh_joysticks(self):
         """Returns a list of tuples (index, name) for all connected joysticks."""
@@ -241,6 +271,20 @@ class SifaPedalCore:
         """
         pygame.event.pump()
 
+        if self.station_mode_type == StationModeType.HOOK_MASZYNA and self.maszyna_hook is not None:
+            speed = self.maszyna_hook.current_speed_kmh
+            if speed is not None:
+                if speed < 0.5 and not self.is_paused:
+                    self.auto_paused = True
+                    self.toggle_pause()
+                elif speed >= 0.5 and self.is_paused and self.auto_paused:
+                    self.auto_paused = False
+                    self.toggle_pause()
+            else:
+                if self.auto_paused and self.is_paused:
+                    self.auto_paused = False
+                    self.toggle_pause()
+
         if self.joystick is None:
             if not self.is_paused:
                 self.set_state(PedalState.NO_JOYSTICK)
@@ -318,4 +362,6 @@ class SifaPedalCore:
     def cleanup(self):
         if hasattr(self, 'listener'):
             self.listener.stop()
+        if hasattr(self, 'maszyna_hook') and self.maszyna_hook is not None:
+            self.maszyna_hook.stop()
         pygame.quit()
