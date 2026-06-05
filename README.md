@@ -6,3 +6,5 @@ To send an acknowledgment, it requires a full cycle of lifting and repressing th
 Sifa mechanics. 
 Additionally, it features an optional emergency brake system that automatically activates if the pedal is released and
 not repressed within a specified time limit.
+
+[SifaPedal Website](https://sifapedal.kzl21.ovh)
